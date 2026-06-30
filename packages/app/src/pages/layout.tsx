@@ -414,6 +414,27 @@ export default function LegacyLayout(props: ParentProps) {
           return
         }
 
+        if (e.details?.type === "mcp.browser.open.failed" || e.type === "mcp.browser.open.failed") {
+          console.log("[MCP OAuth] received BrowserOpenFailed event", e)
+          const props = (e.details?.properties ?? e.properties) as { mcpName: string; url: string }
+          showToast({
+            persistent: true,
+            title: `Authorize ${props.mcpName}`,
+            description: "Open the link in your browser to complete MCP authorization.",
+            actions: [
+              {
+                label: "Open in browser",
+                onClick: () => window.open(props.url, "_blank"),
+              },
+              {
+                label: language.t("common.dismiss"),
+                onClick: "dismiss",
+              },
+            ],
+          })
+          return
+        }
+
         if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked") return
         const title =
           e.details.type === "permission.asked"

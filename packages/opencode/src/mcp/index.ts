@@ -891,26 +891,33 @@ const layer = Layer.effect(
       const callbackPromise = McpOAuthCallback.waitForCallback(result.oauthState, mcpName)
       onAuthorization?.(result.authorizationUrl)
 
-      yield* Effect.tryPromise(() => open(result.authorizationUrl)).pipe(
-        Effect.flatMap((subprocess) =>
-          Effect.callback<void, Error>((resume) => {
-            const timer = setTimeout(() => resume(Effect.void), 500)
-            subprocess.on("error", (err) => {
-              clearTimeout(timer)
-              resume(Effect.fail(err))
-            })
-            subprocess.on("exit", (code) => {
-              if (code !== null && code !== 0) {
+      if (process.env.OPENCODE_PUBLIC_URL) {
+        // Running as a remote web server — no browser to open on the server.
+        // Emit the event so the web UI can show the URL to the user.
+        console.log("[MCP OAuth] emitting BrowserOpenFailed", { mcpName, url: result.authorizationUrl })
+        yield* events.publish(BrowserOpenFailed, { mcpName, url: result.authorizationUrl }).pipe(Effect.ignore)
+      } else {
+        yield* Effect.tryPromise(() => open(result.authorizationUrl)).pipe(
+          Effect.flatMap((subprocess) =>
+            Effect.callback<void, Error>((resume) => {
+              const timer = setTimeout(() => resume(Effect.void), 500)
+              subprocess.on("error", (err) => {
                 clearTimeout(timer)
-                resume(Effect.fail(new Error(`Browser open failed with exit code ${code}`)))
-              }
-            })
+                resume(Effect.fail(err))
+              })
+              subprocess.on("exit", (code) => {
+                if (code !== null && code !== 0) {
+                  clearTimeout(timer)
+                  resume(Effect.fail(new Error(`Browser open failed with exit code ${code}`)))
+                }
+              })
+            }),
+          ),
+          Effect.catch(() => {
+            return events.publish(BrowserOpenFailed, { mcpName, url: result.authorizationUrl }).pipe(Effect.ignore)
           }),
-        ),
-        Effect.catch(() => {
-          return events.publish(BrowserOpenFailed, { mcpName, url: result.authorizationUrl }).pipe(Effect.ignore)
-        }),
-      )
+        )
+      }
 
       const code = yield* Effect.promise(() => callbackPromise)
 
