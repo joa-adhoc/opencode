@@ -36,7 +36,6 @@ import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { SessionRunnerSystemPrompt } from "@opencode-ai/core/session/runner/system-prompt"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { ApplicationTools } from "@opencode-ai/core/tool/application-tools"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Config } from "@opencode-ai/core/config"
 import { ConfigCompaction } from "@opencode-ai/core/config/compaction"
@@ -123,12 +122,7 @@ const permission = Layer.succeed(
     list: () => Effect.die("unused"),
   }),
 )
-const applications = ApplicationTools.layer
-const registry = ToolRegistry.layer.pipe(
-  Layer.provide(permission),
-  Layer.provide(applications),
-  Layer.provide(ToolOutputStore.defaultLayer),
-)
+const registry = ToolRegistry.layer.pipe(Layer.provide(permission), Layer.provide(ToolOutputStore.defaultLayer))
 const agents = AgentV2.layer.pipe(Layer.provide(EventV2.defaultLayer))
 const echo = Layer.effectDiscard(
   ToolRegistry.Service.use((registry) =>
@@ -283,7 +277,6 @@ const it = testEffect(
     SessionStore.defaultLayer,
     client,
     permission,
-    applications,
     agents,
     registry,
     echo,
@@ -579,14 +572,14 @@ const verifyPartialFlushOnInterruption = (kind: FragmentKind) =>
   })
 
 describe("SessionRunnerLLM", () => {
-  it.effect("advertises and executes a globally attached application tool", () =>
+  it.effect("advertises and executes a location registered tool", () =>
     Effect.gen(function* () {
       yield* setup
-      const applicationTools = yield* ApplicationTools.Service
+      const registry = yield* ToolRegistry.Service
       const session = yield* SessionV2.Service
       const contexts: Tool.Context[] = []
-      yield* applicationTools.register({
-        application_context: Tool.make({
+      yield* registry.register({
+        location_context: Tool.make({
           description: "Read application context",
           input: Schema.Struct({ query: Schema.String }),
           output: Schema.Struct({ answer: Schema.String }),
@@ -601,7 +594,7 @@ describe("SessionRunnerLLM", () => {
       responses = [
         [
           LLMEvent.stepStart({ index: 0 }),
-          LLMEvent.toolCall({ id: "call-application", name: "application_context", input: { query: "hello" } }),
+          LLMEvent.toolCall({ id: "call-location", name: "location_context", input: { query: "hello" } }),
           LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
           LLMEvent.finish({ reason: "tool-calls" }),
         ],
@@ -610,13 +603,13 @@ describe("SessionRunnerLLM", () => {
 
       yield* session.resume(sessionID)
 
-      expect(requests[0]?.tools.map((tool) => tool.name)).toContain("application_context")
+      expect(requests[0]?.tools.map((tool) => tool.name)).toContain("location_context")
       expect(contexts).toEqual([
         {
           sessionID,
           agent: AgentV2.ID.make("build"),
           assistantMessageID: expect.stringMatching(/^msg_/),
-          toolCallID: "call-application",
+          toolCallID: "call-location",
         },
       ])
       expect(yield* session.context(sessionID)).toMatchObject([
@@ -626,7 +619,7 @@ describe("SessionRunnerLLM", () => {
           content: [
             {
               type: "tool",
-              id: "call-application",
+              id: "call-location",
               state: { status: "completed", structured: { answer: "HELLO" } },
             },
           ],
@@ -911,10 +904,7 @@ describe("SessionRunnerLLM", () => {
       response = fragmentFixture("text", "text-no-system", ["Done"]).completeEvents
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
-        "Build agent instructions",
-        "Initial context",
-      ])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Build agent instructions", "Initial context"])
     }),
   )
 

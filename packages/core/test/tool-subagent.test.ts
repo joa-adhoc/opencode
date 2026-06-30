@@ -18,6 +18,7 @@ import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { SessionStore } from "@opencode-ai/core/session/store"
+import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SubagentTool } from "@opencode-ai/core/tool/subagent"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
@@ -98,7 +99,7 @@ const layer = AppNodeBuilder.build(
       Job.node,
       ToolOutputStore.cleanupNode,
       SessionV2.node,
-      SubagentTool.node,
+      PluginRuntime.providerNode,
       LocationServiceMap.node,
     ]),
     SessionExecution.node,

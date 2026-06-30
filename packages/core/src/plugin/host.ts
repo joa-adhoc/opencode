@@ -8,12 +8,16 @@ import { Catalog } from "../catalog"
 import { CommandV2 } from "../command"
 import { Credential } from "../credential"
 import { Integration } from "../integration"
+import { Location } from "../location"
 import { ModelV2 } from "../model"
 import { PluginV2 } from "../plugin"
+import { PluginRuntime } from "./runtime"
 import { ProviderV2 } from "../provider"
 import { Reference } from "../reference"
 import type { DeepMutable } from "../schema"
 import { SkillV2 } from "../skill"
+import { Tool } from "../tool/tool"
+import { Tools } from "../tool/tools"
 
 const mutable = <T>(value: T) => value as DeepMutable<T>
 
@@ -23,12 +27,26 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
   const catalog = yield* Catalog.Service
   const commands = yield* CommandV2.Service
   const integration = yield* Integration.Service
+  const location = yield* Location.Service
   const reference = yield* Reference.Service
   const skill = yield* SkillV2.Service
+  const tools = yield* Tools.Service
+  const runtime = yield* PluginRuntime.Service
 
   return {
     options: {},
     agent: {
+      list: () =>
+        agents.list().pipe(
+          Effect.map((data) => ({
+            location: new Location.Info({
+              directory: location.directory,
+              workspaceID: location.workspaceID,
+              project: location.project,
+            }),
+            data,
+          })),
+        ),
       reload: agents.reload,
       transform: (callback) =>
         agents.transform((draft) =>
@@ -215,5 +233,10 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
           }),
         ),
     },
+    tool: {
+      register: (input) => tools.register(input as Readonly<Record<string, Tool.AnyTool>>),
+    },
+    session: runtime.session,
+    backgroundJob: runtime.backgroundJob,
   } satisfies Interface
 })

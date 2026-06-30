@@ -14,6 +14,7 @@ export function host(overrides: Overrides = {}): PluginContext {
   return {
     options: {},
     agent: overrides.agent ?? {
+      list: () => Effect.die("unused agent.list"),
       transform: () => Effect.die("unused agent.transform"),
       reload: () => Effect.die("unused agent.reload"),
     },
@@ -49,11 +50,31 @@ export function host(overrides: Overrides = {}): PluginContext {
       transform: () => Effect.die("unused skill.transform"),
       reload: () => Effect.die("unused skill.reload"),
     },
+    tool: overrides.tool ?? {
+      register: () => Effect.die("unused tool.register"),
+    },
+    session: overrides.session ?? {
+      get: () => Effect.die("unused session.get"),
+      create: () => Effect.die("unused session.create"),
+      messages: () => Effect.die("unused session.messages"),
+      prompt: () => Effect.die("unused session.prompt"),
+      resume: () => Effect.die("unused session.resume"),
+      interrupt: () => Effect.die("unused session.interrupt"),
+      synthetic: () => Effect.die("unused session.synthetic"),
+    },
+    backgroundJob: overrides.backgroundJob ?? {
+      start: () => Effect.die("unused backgroundJob.start"),
+      wait: () => Effect.die("unused backgroundJob.wait"),
+      block: () => Effect.die("unused backgroundJob.block"),
+      background: () => Effect.die("unused backgroundJob.background"),
+      cancel: () => Effect.die("unused backgroundJob.cancel"),
+    },
   }
 }
 
 export function agentHost(agent: AgentV2.Interface): PluginContext["agent"] {
   return {
+    list: () => Effect.die("unused agent.list"),
     reload: agent.reload,
     transform: (callback) =>
       agent.transform((draft) =>

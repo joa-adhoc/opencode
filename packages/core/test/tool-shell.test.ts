@@ -24,6 +24,7 @@ import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionStore } from "@opencode-ai/core/session/store"
 import { PermissionV2 } from "@opencode-ai/core/permission"
+import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { ShellTool } from "@opencode-ai/core/tool/shell"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
@@ -122,7 +123,7 @@ const layer = AppNodeBuilder.build(
       Job.node,
       ToolOutputStore.cleanupNode,
       SessionV2.node,
-      ShellTool.node,
+      PluginRuntime.providerNode,
       LocationServiceMap.node,
       filesystem,
       FSUtil.node,

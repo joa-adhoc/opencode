@@ -2,7 +2,6 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { DateTime, Effect, Equal, Hash, Layer, Schema } from "effect"
-import { Tool } from "@opencode-ai/core/tool/tool"
 import { define } from "@opencode-ai/plugin/v2/effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Catalog } from "@opencode-ai/core/catalog"
@@ -28,14 +27,11 @@ import { Npm } from "../src/npm"
 import { Project } from "../src/project"
 import { Reference } from "../src/reference"
 import { ToolRegistry } from "../src/tool/registry"
-import { ApplicationTools } from "../src/tool/application-tools"
 
-const applicationTools = ApplicationTools.layer
 const it = testEffect(
   Layer.merge(
-    Layer.mergeAll(applicationTools, Database.defaultLayer, EventV2.defaultLayer),
+    Layer.mergeAll(Database.defaultLayer, EventV2.defaultLayer),
     locationServiceMapLayer.pipe(
-      Layer.provide(applicationTools),
       Layer.provide(
         Layer.mergeAll(
           Project.defaultLayer,
@@ -83,14 +79,6 @@ describe("LocationServiceMap", () => {
     ).pipe(
       Effect.flatMap(([blocked, allowed]) =>
         Effect.gen(function* () {
-          yield* (yield* ApplicationTools.Service).register({
-            application_context: Tool.make({
-              description: "Read application context",
-              input: Schema.Struct({}),
-              output: Schema.Struct({ ok: Schema.Boolean }),
-              execute: () => Effect.succeed({ ok: true }),
-            }),
-          })
           yield* Effect.promise(() =>
             fs.writeFile(
               path.join(blocked.path, "opencode.json"),
@@ -119,13 +107,14 @@ describe("LocationServiceMap", () => {
           const blockedState = yield* update(blocked.path)
           expect(blockedState.providers.some((provider) => provider.id === ProviderV2.ID.make("test"))).toBe(false)
           expect(blockedState.tools.map((tool) => tool.name).sort()).toEqual([
-            "application_context",
             "edit",
             "glob",
             "grep",
             "question",
             "read",
+            "shell",
             "skill",
+            "subagent",
             "todowrite",
             "webfetch",
             "websearch",
@@ -134,13 +123,14 @@ describe("LocationServiceMap", () => {
           const allowedState = yield* update(allowed.path)
           expect(allowedState.providers.some((provider) => provider.id === ProviderV2.ID.make("test"))).toBe(true)
           expect(allowedState.tools.map((tool) => tool.name).sort()).toEqual([
-            "application_context",
             "edit",
             "glob",
             "grep",
             "question",
             "read",
+            "shell",
             "skill",
+            "subagent",
             "todowrite",
             "webfetch",
             "websearch",
