@@ -171,9 +171,22 @@ export function Session() {
   })
   onCleanup(() => setEpilogue())
   const messages = sessionMessages
+  const descendantSessionIDs = createMemo(() => {
+    if (session()?.parentID) return []
+    const sessions = data.session.list()
+    const childrenByParent = sessions.reduce((acc, item) => {
+      if (!item.parentID) return acc
+      acc.set(item.parentID, [...(acc.get(item.parentID) ?? []), item.id])
+      return acc
+    }, new Map<string, string[]>())
+    function collect(sessionID: string): string[] {
+      return (childrenByParent.get(sessionID) ?? []).flatMap((id) => [id, ...collect(id)])
+    }
+    return collect(route.sessionID)
+  })
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
-    return data.session.permission.list(route.sessionID) ?? []
+    return [route.sessionID, ...descendantSessionIDs()].flatMap((sessionID) => data.session.permission.list(sessionID) ?? [])
   })
   const questions = createMemo(() => {
     if (session()?.parentID) return []
@@ -227,6 +240,12 @@ export function Session() {
   const sdk = useSDK()
   const editor = useEditorContext()
   const rows = createSessionRows(() => route.sessionID)
+
+  createEffect(
+    on(descendantSessionIDs, (sessionIDs) => {
+      void Promise.all(sessionIDs.map((sessionID) => data.session.permission.refresh(sessionID)))
+    }),
+  )
 
   createEffect(() => {
     const sessionID = route.sessionID
@@ -1063,8 +1082,10 @@ function SessionMessageView(props: { message: SessionMessage }) {
       <Match when={props.message.type === "agent-switched" || props.message.type === "model-switched"}>
         <SessionSwitchMessageV2 message={props.message} />
       </Match>
-      <Match when={props.message.type === "system" || props.message.type === "synthetic"}>
-        <SessionNoticeMessageV2 message={props.message} />
+      <Match when={props.message.type === "system" || props.message.type === "synthetic" || props.message.type === "skill"}>
+        <Show when={props.message.type === "skill"} fallback={<SessionNoticeMessageV2 message={props.message} />}>
+          <SessionSkillMessage message={props.message as Extract<SessionMessage, { type: "skill" }>} />
+        </Show>
       </Match>
       <Match when={props.message.type === "compaction"}>
         <CompactionMessage />
@@ -1225,10 +1246,23 @@ function SessionSwitchMessageV2(props: { message: SessionMessage }) {
 
 function SessionNoticeMessageV2(props: { message: SessionMessage }) {
   const { theme } = useTheme()
+  const text = () => {
+    if (props.message.type === "system" || props.message.type === "synthetic") return props.message.text
+    return ""
+  }
   return (
     <text fg={theme.textMuted}>
-      {props.message.type === "system" || props.message.type === "synthetic" ? props.message.text : ""}
+      {text()}
     </text>
+  )
+}
+
+function SessionSkillMessage(props: { message: Extract<SessionMessage, { type: "skill" }> }) {
+  const { theme } = useTheme()
+  return (
+    <InlineToolRow icon="→" color={theme.textMuted} pending="Skill" complete={true}>
+      Skill {props.message.name}
+    </InlineToolRow>
   )
 }
 

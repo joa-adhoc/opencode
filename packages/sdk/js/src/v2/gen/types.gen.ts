@@ -9,6 +9,7 @@ export type Event =
   | EventIntegrationUpdated
   | EventIntegrationConnectionUpdated
   | EventCatalogUpdated
+  | EventAgentUpdated
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -20,10 +21,12 @@ export type Event =
   | EventSessionNextModelSwitched
   | EventSessionNextMoved
   | EventSessionNextRenamed
+  | EventSessionNextForked
   | EventSessionNextPrompted
   | EventSessionNextPromptAdmitted
   | EventSessionNextContextUpdated
   | EventSessionNextSynthetic
+  | EventSessionNextSkillActivated
   | EventSessionNextShellStarted
   | EventSessionNextShellEnded
   | EventSessionNextStepStarted
@@ -646,7 +649,6 @@ export type Prompt = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  system?: string
 }
 
 export type Pty = {
@@ -785,6 +787,13 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "agent.updated"
+        properties: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        id: string
         type: "session.created"
         properties: {
           sessionID: string
@@ -882,6 +891,16 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "session.next.forked"
+        properties: {
+          timestamp: number
+          sessionID: string
+          parentID: string
+          messageID?: string
+        }
+      }
+    | {
+        id: string
         type: "session.next.prompted"
         properties: {
           timestamp: number
@@ -919,6 +938,17 @@ export type GlobalEvent = {
           timestamp: number
           sessionID: string
           messageID: string
+          text: string
+        }
+      }
+    | {
+        id: string
+        type: "session.next.skill.activated"
+        properties: {
+          timestamp: number
+          sessionID: string
+          messageID: string
+          name: string
           text: string
         }
       }
@@ -1667,10 +1697,12 @@ export type GlobalEvent = {
     | SyncEventSessionNextModelSwitched
     | SyncEventSessionNextMoved
     | SyncEventSessionNextRenamed
+    | SyncEventSessionNextForked
     | SyncEventSessionNextPrompted
     | SyncEventSessionNextPromptAdmitted
     | SyncEventSessionNextContextUpdated
     | SyncEventSessionNextSynthetic
+    | SyncEventSessionNextSkillActivated
     | SyncEventSessionNextShellStarted
     | SyncEventSessionNextShellEnded
     | SyncEventSessionNextStepStarted
@@ -2756,17 +2788,29 @@ export type SessionNotFoundError = {
   message: string
 }
 
+export type MessageNotFoundError = {
+  _tag: "MessageNotFoundError"
+  sessionID: string
+  messageID: string
+  message: string
+}
+
 export type PromptInput = {
   text: string
   files?: Array<PromptInputFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  system?: string
 }
 
 export type ConflictError = {
   _tag: "ConflictError"
   message: string
   resource?: string
+}
+
+export type SkillNotFoundError = {
+  _tag: "SkillNotFoundError"
+  skill: string
+  message: string
 }
 
 export type ServiceUnavailableError = {
@@ -2781,22 +2825,17 @@ export type UnknownError1 = {
   ref?: string
 }
 
-export type MessageNotFoundError = {
-  _tag: "MessageNotFoundError"
-  sessionID: string
-  messageID: string
-  message: string
-}
-
 export type SessionDurableEvent =
   | SessionNextAgentSwitched
   | SessionNextModelSwitched
   | SessionNextMoved
   | SessionNextRenamed
+  | SessionNextForked
   | SessionNextPrompted
   | SessionNextPromptAdmitted
   | SessionNextContextUpdated
   | SessionNextSynthetic
+  | SessionNextSkillActivated
   | SessionNextShellStarted
   | SessionNextShellEnded
   | SessionNextStepStarted
@@ -2831,6 +2870,12 @@ export type SessionMessagesResponse = {
   cursor: {
     previous?: string
     next?: string
+  }
+}
+
+export type GenerateTextResponse = {
+  data: {
+    text: string
   }
 }
 
@@ -2928,6 +2973,7 @@ export type V2Event =
   | IntegrationUpdated
   | IntegrationConnectionUpdated
   | CatalogUpdated
+  | AgentUpdated
   | SessionCreated
   | SessionUpdated
   | SessionDeleted
@@ -2939,10 +2985,12 @@ export type V2Event =
   | SessionNextModelSwitched
   | SessionNextMoved
   | SessionNextRenamed
+  | SessionNextForked
   | SessionNextPrompted
   | SessionNextPromptAdmitted
   | SessionNextContextUpdated
   | SessionNextSynthetic
+  | SessionNextSkillActivated
   | SessionNextShellStarted
   | SessionNextShellEnded
   | SessionNextStepStarted
@@ -3464,6 +3512,23 @@ export type SyncEventSessionNextRenamed = {
   }
 }
 
+export type SyncEventSessionNextForked = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "session.next.forked.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      timestamp: number
+      sessionID: string
+      parentID: string
+      messageID?: string
+    }
+  }
+}
+
 export type SyncEventSessionNextPrompted = {
   type: "sync"
   id: string
@@ -3529,6 +3594,24 @@ export type SyncEventSessionNextSynthetic = {
       timestamp: number
       sessionID: string
       messageID: string
+      text: string
+    }
+  }
+}
+
+export type SyncEventSessionNextSkillActivated = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "session.next.skill.activated.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      timestamp: number
+      sessionID: string
+      messageID: string
+      name: string
       text: string
     }
   }
@@ -3959,10 +4042,12 @@ export type ConfigV2ExperimentalPolicy = {
   resource: string
 }
 
-export type ProjectDirectories = Array<{
+export type ProjectDirectory = {
   directory: string
   strategy?: string
-}>
+}
+
+export type ProjectDirectories = Array<ProjectDirectory>
 
 export type PtyTicketConnectToken = {
   ticket: string
@@ -4096,7 +4181,6 @@ export type SessionMessageUser = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  system?: string
   type: "user"
 }
 
@@ -4122,6 +4206,19 @@ export type SessionMessageSystem = {
     created: number
   }
   type: "system"
+  text: string
+}
+
+export type SessionMessageSkill = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    created: number
+  }
+  type: "skill"
+  name: string
   text: string
 }
 
@@ -4274,6 +4371,7 @@ export type SessionMessage =
   | SessionMessageUser
   | SessionMessageSynthetic
   | SessionMessageSystem
+  | SessionMessageSkill
   | SessionMessageShell
   | SessionMessageAssistant
   | SessionMessageCompaction
@@ -4357,6 +4455,26 @@ export type SessionNextRenamed = {
   }
 }
 
+export type SessionNextForked = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "session.next.forked"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    timestamp: number
+    sessionID: string
+    parentID: string
+    messageID?: string
+  }
+}
+
 export type SessionNextPrompted = {
   id: string
   metadata?: {
@@ -4435,6 +4553,27 @@ export type SessionNextSynthetic = {
     timestamp: number
     sessionID: string
     messageID: string
+    text: string
+  }
+}
+
+export type SessionNextSkillActivated = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "session.next.skill.activated"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    timestamp: number
+    sessionID: string
+    messageID: string
+    name: string
     text: string
   }
 }
@@ -5115,6 +5254,11 @@ export type IntegrationAttemptStatus =
       }
     }
 
+export type ProjectCurrent = {
+  id: string
+  directory: string
+}
+
 export type PermissionV2Request = {
   id: string
   sessionID: string
@@ -5213,6 +5357,23 @@ export type CatalogUpdated = {
     [key: string]: unknown
   }
   type: "catalog.updated"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    [key: string]: unknown
+  }
+}
+
+export type AgentUpdated = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "agent.updated"
   durable?: {
     aggregateID: string
     seq: number
@@ -6371,6 +6532,14 @@ export type EventCatalogUpdated = {
   }
 }
 
+export type EventAgentUpdated = {
+  id: string
+  type: "agent.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
 export type EventSessionCreated = {
   id: string
   type: "session.created"
@@ -6479,6 +6648,17 @@ export type EventSessionNextRenamed = {
   }
 }
 
+export type EventSessionNextForked = {
+  id: string
+  type: "session.next.forked"
+  properties: {
+    timestamp: number
+    sessionID: string
+    parentID: string
+    messageID?: string
+  }
+}
+
 export type EventSessionNextPrompted = {
   id: string
   type: "session.next.prompted"
@@ -6521,6 +6701,18 @@ export type EventSessionNextSynthetic = {
     timestamp: number
     sessionID: string
     messageID: string
+    text: string
+  }
+}
+
+export type EventSessionNextSkillActivated = {
+  id: string
+  type: "session.next.skill.activated"
+  properties: {
+    timestamp: number
+    sessionID: string
+    messageID: string
+    name: string
     text: string
   }
 }
@@ -11700,6 +11892,45 @@ export type V2SessionGetResponses = {
 
 export type V2SessionGetResponse = V2SessionGetResponses[keyof V2SessionGetResponses]
 
+export type V2SessionForkData = {
+  body: {
+    messageID?: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: never
+  url: "/api/session/{sessionID}/fork"
+}
+
+export type V2SessionForkErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * SessionNotFoundError | MessageNotFoundError
+   */
+  404: MessageNotFoundError | SessionNotFoundError
+}
+
+export type V2SessionForkError = V2SessionForkErrors[keyof V2SessionForkErrors]
+
+export type V2SessionForkResponses = {
+  /**
+   * Success
+   */
+  200: {
+    data: SessionV2Info
+  }
+}
+
+export type V2SessionForkResponse = V2SessionForkResponses[keyof V2SessionForkResponses]
+
 export type V2SessionSwitchAgentData = {
   body: {
     agent: string
@@ -11856,6 +12087,45 @@ export type V2SessionPromptResponses = {
 }
 
 export type V2SessionPromptResponse = V2SessionPromptResponses[keyof V2SessionPromptResponses]
+
+export type V2SessionSkillData = {
+  body: {
+    id?: string
+    skill: string
+    resume?: boolean
+  }
+  path: {
+    sessionID: string
+  }
+  query?: never
+  url: "/api/session/{sessionID}/skill"
+}
+
+export type V2SessionSkillErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * SessionNotFoundError | SkillNotFoundError
+   */
+  404: SkillNotFoundError | SessionNotFoundError
+}
+
+export type V2SessionSkillError = V2SessionSkillErrors[keyof V2SessionSkillErrors]
+
+export type V2SessionSkillResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2SessionSkillResponse = V2SessionSkillResponses[keyof V2SessionSkillResponses]
 
 export type V2SessionCompactData = {
   body?: never
@@ -12353,6 +12623,47 @@ export type V2ModelListResponses = {
 
 export type V2ModelListResponse = V2ModelListResponses[keyof V2ModelListResponses]
 
+export type V2GenerateTextData = {
+  body: {
+    prompt: string
+    model?: ModelRef
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/generate"
+}
+
+export type V2GenerateTextErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type V2GenerateTextError = V2GenerateTextErrors[keyof V2GenerateTextErrors]
+
+export type V2GenerateTextResponses = {
+  /**
+   * GenerateTextResponse
+   */
+  200: GenerateTextResponse
+}
+
+export type V2GenerateTextResponse = V2GenerateTextResponses[keyof V2GenerateTextResponses]
+
 export type V2ProviderListData = {
   body?: never
   path?: never
@@ -12792,6 +13103,76 @@ export type V2CredentialUpdateResponses = {
 }
 
 export type V2CredentialUpdateResponse = V2CredentialUpdateResponses[keyof V2CredentialUpdateResponses]
+
+export type V2ProjectCurrentData = {
+  body?: never
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/project/current"
+}
+
+export type V2ProjectCurrentErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2ProjectCurrentError = V2ProjectCurrentErrors[keyof V2ProjectCurrentErrors]
+
+export type V2ProjectCurrentResponses = {
+  /**
+   * Project.Current
+   */
+  200: ProjectCurrent
+}
+
+export type V2ProjectCurrentResponse = V2ProjectCurrentResponses[keyof V2ProjectCurrentResponses]
+
+export type V2ProjectDirectoriesData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/project/{projectID}/directories"
+}
+
+export type V2ProjectDirectoriesErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2ProjectDirectoriesError = V2ProjectDirectoriesErrors[keyof V2ProjectDirectoriesErrors]
+
+export type V2ProjectDirectoriesResponses = {
+  /**
+   * Project.Directories
+   */
+  200: ProjectDirectories
+}
+
+export type V2ProjectDirectoriesResponse = V2ProjectDirectoriesResponses[keyof V2ProjectDirectoriesResponses]
 
 export type V2PermissionRequestListData = {
   body?: never
