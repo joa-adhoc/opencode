@@ -358,6 +358,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     const event = e.details
     const recent = bootingRoot || Date.now() - bootedAt < 1500
 
+    if (event.type === "mcp.tools.changed") {
+      void queryClient.refetchQueries(queryOptionsApi.mcp(key))
+    }
+
     session.apply(event)
 
     if (directory === "global") {
@@ -472,6 +476,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         const sdk = sdkFor(key)
         const status = children.child(key, { bootstrap: false })[0].mcp[name].status
         await toggleMcp({
+          name,
           status,
           connect: async () => {
             await sdk.mcp.connect({ name })
@@ -480,7 +485,8 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
             await sdk.mcp.disconnect({ name })
           },
           authenticate: async () => {
-            await sdk.mcp.auth.authenticate({ name })
+            const result = (await sdk.mcp.auth.authenticate({ name })).data
+            if (result && "authorizationUrl" in result) return { authorizationUrl: result.authorizationUrl }
           },
           refresh: async () => {
             await queryClient.refetchQueries(queryOptionsApi.mcp(key))

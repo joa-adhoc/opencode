@@ -8622,9 +8622,14 @@ export type McpAuthAuthenticateError = McpAuthAuthenticateErrors[keyof McpAuthAu
 
 export type McpAuthAuthenticateResponses = {
   /**
-   * OAuth authentication completed
+   * OAuth authentication completed, or started (authorizationUrl) when it must be opened client-side
    */
-  200: McpStatus
+  200:
+    | McpStatus
+    | {
+        authorizationUrl: string
+        oauthState: string
+      }
 }
 
 export type McpAuthAuthenticateResponse = McpAuthAuthenticateResponses[keyof McpAuthAuthenticateResponses]

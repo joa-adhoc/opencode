@@ -182,7 +182,7 @@ export interface Interface {
   readonly authenticate: (
     mcpName: string,
     onAuthorization?: (authorizationUrl: string) => void,
-  ) => Effect.Effect<Status, NotFoundError>
+  ) => Effect.Effect<Status | { authorizationUrl: string; oauthState: string }, NotFoundError>
   readonly finishAuth: (mcpName: string, authorizationCode: string) => Effect.Effect<Status, NotFoundError>
   readonly removeAuth: (mcpName: string) => Effect.Effect<void>
   readonly supportsOAuth: (mcpName: string) => Effect.Effect<boolean, NotFoundError>
@@ -890,6 +890,39 @@ const layer = Layer.effect(
 
       const callbackPromise = McpOAuthCallback.waitForCallback(result.oauthState, mcpName)
       onAuthorization?.(result.authorizationUrl)
+
+      if (process.env.OPENCODE_PUBLIC_URL) {
+        // Running as a remote web server — no browser to open on the server.
+        // Emit the event as a fallback (in case a client is listening on /global/event),
+        // but don't rely on it: return the authorizationUrl directly in the response so
+        // the client can open it itself from the request that triggered this click.
+        console.log("[MCP OAuth] emitting BrowserOpenFailed", { mcpName, url: result.authorizationUrl })
+        yield* events.publish(BrowserOpenFailed, { mcpName, url: result.authorizationUrl }).pipe(Effect.ignore)
+
+        const bridge = yield* EffectBridge.make()
+        bridge.fork(
+          Effect.gen(function* () {
+            const code = yield* Effect.promise(() => callbackPromise)
+            const storedState = yield* auth.getOAuthState(mcpName)
+            if (storedState !== result.oauthState) {
+              yield* auth.clearOAuthState(mcpName)
+              yield* Effect.logWarning("MCP OAuth state mismatch - potential CSRF attack", { mcpName })
+              return
+            }
+            yield* auth.clearOAuthState(mcpName)
+            yield* finishAuth(mcpName, code)
+            // The client returned from authenticate() before this ran, so it has
+            // no way to know completion happened — nudge it to refetch status.
+            yield* events.publish(ToolsChanged, { server: mcpName }).pipe(Effect.ignore)
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("MCP OAuth background completion failed", { mcpName, error: String(error) }),
+            ),
+          ),
+        )
+
+        return { authorizationUrl: result.authorizationUrl, oauthState: result.oauthState }
+      }
 
       yield* Effect.tryPromise(() => open(result.authorizationUrl)).pipe(
         Effect.flatMap((subprocess) =>

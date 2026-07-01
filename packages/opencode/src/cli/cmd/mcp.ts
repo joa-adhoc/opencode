@@ -265,7 +265,9 @@ export const McpAuthCommand = effectCmd({
     ).pipe(
       Effect.tap((status) =>
         Effect.sync(() => {
-          if (status.status === "connected") {
+          if ("authorizationUrl" in status) {
+            spinner.stop("Authorization started; completing in the background once you finish in the browser.")
+          } else if (status.status === "connected") {
             spinner.stop("Authentication successful!")
           } else if (status.status === "needs_client_registration") {
             spinner.stop("Authentication failed", 1)
