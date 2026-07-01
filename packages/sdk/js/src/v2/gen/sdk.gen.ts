@@ -2359,7 +2359,7 @@ export class Auth2 extends HeyApiClient {
   /**
    * Authenticate MCP OAuth
    *
-   * Start OAuth flow and wait for callback (opens browser).
+   * Start OAuth flow. Returns the authorization URL immediately if the client must open it (e.g. no local browser); the callback is completed in the background.
    */
   public authenticate<ThrowOnError extends boolean = false>(
     parameters: {

@@ -13,6 +13,7 @@ import { EventSessionError } from "@opencode-ai/sdk/v2"
 import { Persist, persisted } from "@/utils/persist"
 import { playSoundById } from "@/utils/sound"
 import { showToast } from "@/utils/toast"
+import { consumeRecentlyOpened } from "./global-sync/mcp-auth-tracker"
 import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { type DraftTab, useTabs } from "./tabs"
@@ -390,6 +391,9 @@ function createServerNotificationState(input: {
 
     if (event.type === "mcp.browser.open.failed") {
       const { mcpName, url } = event.properties
+      // The authenticate click already opened this URL directly via window.open()
+      // (context/global-sync/mcp.ts) — skip the redundant toast for that attempt.
+      if (consumeRecentlyOpened(mcpName)) return
       showToast({
         persistent: true,
         title: `Authorize ${mcpName}`,

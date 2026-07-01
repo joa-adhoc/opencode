@@ -93,13 +93,17 @@ export const McpApi = HttpApi.make("mcp")
         HttpApiEndpoint.post("authAuthenticate", McpPaths.authAuthenticate, {
           params: { name: Schema.String },
           query: WorkspaceRoutingQuery,
-          success: described(MCP.Status, "OAuth authentication completed"),
+          success: described(
+            Schema.Union([MCP.Status, AuthStartResponse]),
+            "OAuth authentication completed, or started (authorizationUrl) when it must be opened client-side",
+          ),
           error: [UnsupportedOAuthError, McpServerNotFoundError],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "mcp.auth.authenticate",
             summary: "Authenticate MCP OAuth",
-            description: "Start OAuth flow and wait for callback (opens browser).",
+            description:
+              "Start OAuth flow. Returns the authorization URL immediately if the client must open it (e.g. no local browser); the callback is completed in the background.",
           }),
         ),
         HttpApiEndpoint.delete("authRemove", McpPaths.auth, {

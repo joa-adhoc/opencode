@@ -332,6 +332,7 @@ mcpTest.instance(
         connectSucceedsImmediately = true
 
         const result = yield* mcp.authenticate("test-oauth-connect")
+        if (!("status" in result)) throw new Error("expected a Status result")
         expect(result.status).toBe("connected")
 
         const after = yield* mcp.status()
@@ -339,6 +340,42 @@ mcpTest.instance(
       }),
     ),
   { config: config("test-oauth-connect") },
+)
+
+mcpTest.instance(
+  "authenticate() returns the URL immediately under OPENCODE_PUBLIC_URL and finishes auth in the background",
+  () =>
+    Effect.gen(function* () {
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          delete process.env.OPENCODE_PUBLIC_URL
+        }),
+      )
+      const mcp = yield* MCP.Service
+      const name = "test-remote-web-auth"
+
+      process.env.OPENCODE_PUBLIC_URL = "https://opencode.example.com"
+
+      const result = yield* mcp.authenticate(name)
+      if (!("authorizationUrl" in result)) throw new Error("expected an authorizationUrl result")
+      expect(result.authorizationUrl).toContain("https://auth.example.com/authorize")
+
+      // Auth is still pending — the callback hasn't landed yet.
+      expect((yield* mcp.status())[name]?.status).toBe("needs_auth")
+
+      // Simulate the callback landing (what the /mcp/oauth/callback route does).
+      connectSucceedsImmediately = true
+      McpOAuthCallback.resolveFromExternal("test-code", result.oauthState)
+
+      // The rest (finishAuth) runs in a detached background fiber; poll for it.
+      let status = (yield* mcp.status())[name]?.status
+      for (let i = 0; i < 50 && status !== "connected"; i++) {
+        yield* Effect.sleep("10 millis")
+        status = (yield* mcp.status())[name]?.status
+      }
+      expect(status).toBe("connected")
+    }),
+  { config: config("test-remote-web-auth") },
 )
 
 mcpTest.instance(
@@ -358,6 +395,7 @@ mcpTest.instance(
         serverCapabilities = { resources: {} }
 
         const result = yield* mcp.authenticate("test-oauth-resources")
+        if (!("status" in result)) throw new Error("expected a Status result")
         expect(result.status).toBe("connected")
         expect(listToolsCalls).toBe(0)
         expect(Object.keys(yield* mcp.resources())).toEqual(["test-oauth-resources:docs://readme"])

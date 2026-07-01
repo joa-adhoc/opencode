@@ -5,6 +5,7 @@ describe("toggleMcp", () => {
   test("runs the status action before refreshing the owning query", async () => {
     const calls: string[] = []
     const input = (status: "connected" | "needs_auth" | "disabled") => ({
+      name: "test-mcp",
       status,
       connect: async () => {
         calls.push("connect")
