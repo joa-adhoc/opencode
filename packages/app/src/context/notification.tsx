@@ -12,6 +12,7 @@ import { decode64 } from "@/utils/base64"
 import { EventSessionError } from "@opencode-ai/sdk/v2"
 import { Persist, persisted } from "@/utils/persist"
 import { playSoundById } from "@/utils/sound"
+import { showToast } from "@/utils/toast"
 import { useGlobal } from "./global"
 import { ServerConnection, useServer } from "./server"
 import { type DraftTab, useTabs } from "./tabs"
@@ -386,6 +387,27 @@ function createServerNotificationState(input: {
 
   const unsub = serverSDK().event.listen((e) => {
     const event = e.details
+
+    if (event.type === "mcp.browser.open.failed") {
+      const { mcpName, url } = event.properties
+      showToast({
+        persistent: true,
+        title: `Authorize ${mcpName}`,
+        description: "Open the link in your browser to complete MCP authorization.",
+        actions: [
+          {
+            label: "Open in browser",
+            onClick: () => window.open(url, "_blank"),
+          },
+          {
+            label: language.t("common.dismiss"),
+            onClick: "dismiss",
+          },
+        ],
+      })
+      return
+    }
+
     if (event.type !== "session.idle" && event.type !== "session.error") return
 
     const directory = e.name
